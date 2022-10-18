@@ -9,7 +9,6 @@ __To install distiller__, clone its repository, type ```cd distiller``` and then
 
 - torch
 - tensorflow
-- torchvision
 - pretrainedmodels 
 
 To install the other dependencies, simply type 
@@ -23,6 +22,7 @@ Download link for the datasets:
 - MSN30k [here](https://www.microsoft.com/en-us/research/project/mslr/)
 - Istella-S [here](http://quickrank.isti.cnr.it/istella-dataset/)
 
+On MSN30K, experiments will be conducted on Fold1 by defaut. 
 ## Training a model 
 
 The script ```train.py``` allows to train a model by distillation from a pre-trained ensemble of regression trees. We provide the tree-based models, thus you do not have to it on your own. Run 
