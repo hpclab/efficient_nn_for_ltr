@@ -3,4 +3,5 @@ sklearn
 progress
 torchsummary
 pandas
+cython #for rankeval
 rankeval
