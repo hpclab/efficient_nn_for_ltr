@@ -39,3 +39,9 @@ Inside the folder ```logs``` you will find a subfolder named "sample_model" that
 
 
 
+## Compressing a model
+Once that you have trained a neural model, you can compress it using the ```distiller_compression.py``` script. Here, you shall pass the path to the pretrained model by using the option ```--pretained-model``` and the path to the .yaml file containing the instructions to compress. An example of the latter is provided.
+
+### Example 
+
+```python distiller_compression.py --dataset-name msn30k --original-model LM600_msn --original-model-path msn30k_256leaves_ensemble.xml --name sample_compression --compress compress_MLP.yaml ```
