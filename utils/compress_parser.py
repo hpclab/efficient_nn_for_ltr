@@ -6,11 +6,17 @@ def get_parser():
     parser = argparse.ArgumentParser(
         description='Distiller based compression scripts for MultiLayer Perceptron on Learning to Rank',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    # Datasets
     parser.add_argument("--dataset-name", type=str, default="msn30k", help="Dataset ",
                         choices=['msn10k', 'msn30k', 'istella'])
-    parser.add_argument('--original-model', type=str, default="LM600_msn",
-                        help="Model to approximate with Neural Network ",
+    parser.add_argument("--dataset-path", type=str, default="/data/letor-datasets/", help="Path to the dataset folder")
+
+    #Original Model
+    parser.add_argument("--original-model", type=str, default="LM600_msn",
+                        help="Model to approximate with the Multi Layer Perceptron",
                         choices=['LM2500_istella', 'LM600_msn', 'LM800_msn'])
+    parser.add_argument("--original-model-path", type=str, default="./best_lgb_msn30kf1_256leaves.txt",
+                        help="Path to the pre-trained ensemble of regression trees")
 
     parser.add_argument("--pretrained-model", type=str)
 
@@ -42,8 +48,6 @@ def get_parser():
                         help='Ensure deterministic execution for re-producible results.')
     parser.add_argument('--seed', type=int, default=None,
                         help='seed the PRNG for CPU, CUDA, numpy, and Python')
-    parser.add_argument('--gpus', metavar='DEV_ID', default=0,
-                        help='Comma-separated list of GPU device IDs to be used (default is to use all available devices)')
     parser.add_argument('--percentage-of-art-data', type=float, default=1.0)
 
     parser.add_argument('--name', '-n', metavar='NAME', default=None, help='Experiment name')

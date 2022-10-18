@@ -25,7 +25,8 @@ import pandas as pd
 
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from utils.train_utils import *
-from utils import AverageMeter, Bar
+from utils.train_utils import AverageMeter
+from progress.bar import Bar
 import utils.compress_parser as parser
 
 
@@ -41,13 +42,10 @@ def main():
 
     args = parser.get_parser().parse_args()
     script_dir = os.path.dirname(__file__)
-    module_path = os.path.abspath(os.path.join(script_dir, '..', '..'))
-    #global msglogger
-
-
 
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
+
     msglogger = apputils.config_pylogger(os.path.join(script_dir, 'logging.conf'), args.name, args.output_dir)
 
     msglogger.debug("Distiller: %s", distiller.__version__)
@@ -63,18 +61,18 @@ def main():
     ending_epoch = args.epochs
 
     args.device = 'cuda'
-    if args.gpus is not None:
-        try:
-            args.gpus = [int(s) for s in args.gpus.split(',')]
-        except ValueError:
-            raise ValueError('ERROR: Argument --gpus must be a comma-separated list of integers only')
-        available_gpus = torch.cuda.device_count()
-        for dev_id in args.gpus:
-            if dev_id >= available_gpus:
-                raise ValueError('ERROR: GPU device ID {0} requested, but only {1} devices available'
-                                 .format(dev_id, available_gpus))
-        # Set default device in case the first one on the list != 0
-        torch.cuda.set_device(args.gpus[0])
+    # if args.gpus is not None:
+    #     try:
+    #         args.gpus = [int(s) for s in args.gpus.split(',')]
+    #     except ValueError:
+    #         raise ValueError('ERROR: Argument --gpus must be a comma-separated list of integers only')
+    #     available_gpus = torch.cuda.device_count()
+    #     for dev_id in args.gpus:
+    #         if dev_id >= available_gpus:
+    #             raise ValueError('ERROR: GPU device ID {0} requested, but only {1} devices available'
+    #                              .format(dev_id, available_gpus))
+    #     # Set default device in case the first one on the list != 0
+    #     torch.cuda.set_device(args.gpus[0])
 
     msn_train, msn_validation, msn_test, original_model, scaler, imputer, n_features = load_dataset_and_orginal_model(
         args)
@@ -86,7 +84,7 @@ def main():
 
     ndcg_test = train_compress_evaluate_and_save_model(model, train_loader, val_loader, msn_validation, msn_test,
                                               scaler, imputer, args, start_epoch, ending_epoch, msglogger )
-
+    return ndcg_test
 
 
 def train_compress_evaluate_and_save_model(model, train_loader, validation_loader, msn_validation, msn_test,
@@ -95,16 +93,11 @@ def train_compress_evaluate_and_save_model(model, train_loader, validation_loade
     compression_scheduler = None
     # Create a couple of logging backends.  TensorBoardLogger writes log files in a format
     # that can be read by Google's Tensor Board.  PythonLogger writes to the Python logger.
-    tflogger = TensorBoardLogger(msglogger.logdir)
+    #tflogger = TensorBoardLogger(msglogger.logdir)
     pylogger = PythonLogger(msglogger)
 
     criterion = nn.MSELoss(reduction='mean')
-    # optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     optimizer = optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    lr_scheduler = ReduceLROnPlateau(optimizer, mode="min", factor=args.gamma, patience=10)
-
-
-
 
     if args.compress:
         compression_scheduler = distiller.file_config(model, optimizer, args.compress, compression_scheduler,
@@ -120,40 +113,31 @@ def train_compress_evaluate_and_save_model(model, train_loader, validation_loade
 
     df_log = pd.DataFrame(columns=["train_loss", "val_loss", "ndcg@10", "map_1", "map_0"])
 
-    #early_stopping = EarlyStopping(patience= 10)
-
 
     for epoch in range(start_epoch, ending_epoch):
-
         print('\nEpoch: [%d | %d]' % (epoch + 1, args.epochs))
         if compression_scheduler:
-
             compression_scheduler.on_epoch_begin(epoch,
                 metrics=(val_loss if (epoch != start_epoch) else 10**6))
-
-            if epoch==0:
-
+            if epoch == 0:
                 print("PERFORMANCE WITHOUT RE-TRAINING ")
                 compression_scheduler.mask_all_weights()
-                val_loss = valid(validation_loader, model, criterion, args)
+                val_loss, scores = valid(validation_loader, model, criterion, args)
                 ndcg_val, map_1_val, map_0_val = compute_metrics(model, msn_validation, scaler, imputer)
                 current_df = pd.DataFrame([[0., val_loss, ndcg_val, map_1_val, map_0_val]],
                                           columns=["train_loss", "val_loss", "ndcg@10", "map_1", "map_0"])
                 df_log = df_log.append(current_df)
 
                 print(current_df)
-
-
         train_loss = train_and_compress(train_loader, model, criterion, optimizer, epoch, compression_scheduler,
-                                        loggers=[tflogger, pylogger], args=args, val_loader = validation_loader)
-
+                                        loggers=[pylogger], args=args, val_loader = validation_loader)
 
         if args.masks_sparsity:
             msglogger.info(distiller.masks_sparsity_tbl_summary(model, compression_scheduler))
 
         # evaluate on validation set
-        val_loss = valid(validation_loader, model, criterion, args)
-        distiller.log_weights_sparsity(model, epoch, loggers=[tflogger, pylogger])
+        val_loss, scores = valid(validation_loader, model, criterion, args)
+        distiller.log_weights_sparsity(model, epoch, loggers=[pylogger])
 
 
         if compression_scheduler:
@@ -211,7 +195,7 @@ def train_compress_evaluate_and_save_model(model, train_loader, validation_loade
                                                                                               map_0_test))
     f.close()
 
-    return  ndcg_test
+    return ndcg_test
 
 
 
@@ -288,41 +272,8 @@ def train_and_compress(train_loader, model, criterion, optimizer, epoch,
     return losses.avg
 
 
-def check_pytorch_version():
-    from pkg_resources import parse_version
-    if parse_version(torch.__version__) < parse_version('1.0.1'):
-        print("\nNOTICE:")
-        print("The Distiller \'master\' branch now requires at least PyTorch version 1.0.1 due to "
-              "PyTorch API changes which are not backward-compatible.\n"
-              "Please install PyTorch 1.0.1 or its derivative.\n"
-              "If you are using a virtual environment, do not forget to update it:\n"
-              "  1. Deactivate the old environment\n"
-              "  2. Install the new environment\n"
-              "  3. Activate the new environment")
-        exit(1)
-
-
 
 
 if __name__ == '__main__':
-    try:
-        check_pytorch_version()
+    main()
 
-        main()
-    except KeyboardInterrupt:
-        print("\n-- KeyboardInterrupt --")
-    except Exception as e:
-        if msglogger is not None:
-            # We catch unhandled exceptions here in order to log them to the log file
-            # However, using the msglogger as-is to do that means we get the trace twice in stdout - once from the
-            # logging operation and once from re-raising the exception. So we remove the stdout logging handler
-            # before logging the exception
-            handlers_bak = msglogger.handlers
-            msglogger.handlers = [h for h in msglogger.handlers if type(h) != logging.StreamHandler]
-            msglogger.error(traceback.format_exc())
-            msglogger.handlers = handlers_bak
-        raise
-    finally:
-        if msglogger is not None:
-            msglogger.info('')
-            msglogger.info('Log file for this run: ' + os.path.realpath(msglogger.log_filename))
