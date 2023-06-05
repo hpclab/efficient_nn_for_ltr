@@ -25,7 +25,10 @@ Download link for the datasets:
 On MSN30K, experiments will be conducted on Fold1 by defaut. 
 ## Training a model 
 
-The script ```train.py``` allows to train a model by distillation from a pre-trained ensemble of regression trees. We provide the tree-based models, thus you do not have to it on your own. Run 
+The script ```train.py``` allows to train a model by distillation from a pre-trained ensemble of regression trees. We provide the tree-based models, thus you do not have to it on your own.
+The pre-trained model for MSN30k is avaialble in this repo (```LM600_msn.txt```). The model for I-stella is avaialble here https://www.dropbox.com/sh/b5fo04eoczu4qe0/AADkTvvrYWLZq3rYoBVo-NaJa?dl=0. 
+
+Run 
 
 ```python train.py --help```
 
